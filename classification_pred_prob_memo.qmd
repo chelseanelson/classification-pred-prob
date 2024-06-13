@@ -1,0 +1,231 @@
+---
+title: "Can we predict if a host is a superhost? Modeling with real airbnb booking data"
+
+subtitle: |
+  | Classification Prediction Problem
+  | Data Science 3 with R (STAT 301-3)
+
+author: Chelsea Nelson
+
+pagetitle: "Classification Prediction Problem"
+
+date: today
+
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    
+execute:
+  echo: false
+  warning: false
+
+from: markdown+emoji 
+reference-location: margin
+citation-location: margin
+---
+::: {.callout-tip icon="false" appearance="simple"}
+## Github Repo Link
+
+[Classification Prediction Problem Github Repo](https://github.com/stat301-3-2024-spring/classification-pred-prob-chelseanelson)
+:::
+
+```{r}
+#| label: load-packages
+
+library(tidyverse)
+library(tidymodels)
+library(here)
+
+```
+
+## Introduction 
+
+Welcome to my Airbnb Superhost Classification Project!
+
+Within this project, I applied and extend my skills in predictive modeling to identify superhosts among Airbnb listings in Chicago. Superhosts are recognized for their outstanding hospitality, thus correctly identifying them can enhance user experience and trust on the platform. 
+
+For this classification challenge, I first conducted a thorough EDA to start to understand the data's structure and the relationships between various features and the superhost status. Afterwards, I conducted multiple different rounds of model building all based off of the previously ones before it. Thus in round 1, I chose to start with multiple models to evaluate their initial performances. This approach allowed me to identify which models performed the best before narrowing down my options in subsequent rounds. This iterative process ensures that I selected the most effective models for further refinement and optimization. 
+
+#### Added Variables 
+
+Through understanding the data's structure the relationship between the various variables with my EDA. I decided to try an enhance the predictive power of my models, through the introduction of two additional variables, as I felt they had potential relevance to the superhost status.
+
+- `in_illinois`: A binary variable indicating whether the listing is located in Illinois. I added this variable as I saw that a lot of the host locations where in Illinois with only a fair amount not being in Illinois thus I felt it would be intuitive to add on this variable that looked at if someone was a host in Illinois or not, seeing if it has any influence in them being a superhost. 
+
+- `number_of_verifications`: A variable representing the number of verifications the host has undergone. I added this variable as I saw that the original verifications variable did not really provide a lot of value as, I personally feel that the total number of verifications matters more than the type of verifications that a host has in determining if they have superhost status or not. 
+
+#### Data Splitting and Validation
+
+To ensure robust model training and evaluation, I employed an 80/20 or 75/25 train-test split strategy, depending on if I felt I wanted more data within my training set or not. Additionally, I utilized cross-validation to further validate my models and mitigate the risk of overfitting. This approach ensures that the model's performance is generalizable to unseen data.
+
+#### Evaluation Metric
+
+The primary evaluation metric for this project is the area under the ROC curve (`roc_auc`). A high `roc_auc` value indicates that the model has excellent predictive ability, effectively distinguishing between superhosts and non-superhosts. My goal is to achieve a `roc_auc` value as close to 1 as possible, demonstrating superior model performance.
+
+## Model Selection
+
+### Round 2, Recipe 1 Boosted Tree Model 
+
+This model is associated with the submission that performed the best on the public leaderboard for me, being `airbnb_submission_2_2.csv`. This model was created during the second round of model building and testing, being the second submission from this round. 
+
+#### How I got to this model
+
+I got to this model after looking at what worked and did not work from the previous round, both in terms of the tuning parameters that I set, as well as the models to use, and how I should format my recipes to bring the most optimization to my models. 
+
+Through the first round results, I saw that a more baseline or less feature engineered recipe, from at least my perspective of how I was working on them, performed a lot better than the heavily feature engineered recipe. Looking back, I do think this could be related to how I ordered my steps within the recipes however, this also perhaps acted as a lesson that too much feature engineering can also lower performance rather than improve it always. 
+
+Thus, I went into round 2 with the works to not really change the recipe outlines that I set up from round 1, specifically in terms of the more baseline one, but rather focus more into changing the tuning parameters, finding the best ranges for my models to be optimized in their performances. 
+
+Furthermore, I chose to continue working with Boosted Tree models through this process, as they continued to performed the best out of all of the model types for each round and stage. 
+
+#### Recipe
+
+Turning to the recipe, it is very similar to the one I used in round 1, however differing as I decided to use `step_impute_median()` rather than `step_impute_mean()` as it is less sensitive to outliers. As Boosted Tree models are nonparametric, I did create a separate recipe for them from the parametric models. The only differ being that `step_dummy()` for the nonparametric models has one hot encoding enabled, and the parametric models do not. 
+
+Steps:
+
+- `update_role()` : This function updates the roles of variables in your dataset. In This I used it to update the role of the `id` variable from being a predictor to being just an id indicator that would not be apart of the model building but still exist in my dataset. This ensures that the model treats each variable appropriately, avoiding misuse of variables that could lead to poor model performance.
+
+- `step_date()` : This step extracts components of date variables (e.g., year, month, day, day of the week), making them into separate entities within my dataset. By breaking down date variables into meaningful components, the model can better capture temporal patterns and trends, which can enhance predictive accuracy.
+
+- `step_impute_mode()` : This step imputes missing values in categorical variables using the mode or most frequent value. Handling missing data appropriately prevents loss of information and allows the model to make better use of available data, improving robustness and accuracy.
+
+- `step_impute_median()` : This step imputes missing values in numeric variables using the median or 50% percentile number. Imputing with the median is less sensitive to outliers compared to the mean, resulting in more stable and reliable imputations that improve model performance.
+
+- `step_novel()` : This step assigns a new category ("novel") to previously unseen factor levels in categorical variables during prediction. By handling novel levels, the model can generalize better to new data and avoid errors or misclassifications caused by unexpected categories.
+
+- `step_other()` : This step consolidates infrequent factor levels into a single "other" category. With this step I set the threshold to 0.5, meaning that if the factor level did not show up more than half the time, it would be placed into the "other" category. This helps to reduce the number of categories in the categorical variables, preventing overfitting and improving model interpretability and performance by ensuring the model focuses on more significant patterns.
+
+- `step_dummy()` : This step converts categorical variables into dummy (one-hot encoded) variables. Dummy variables allow models to handle categorical data appropriately, enabling the model to capture the impact of each category on the outcome variable.
+
+- `step_nzv()` : This step removes near-zero variance predictors. By eliminating predictors that have little to no variation, the model avoids overfitting to noise and improves computational efficiency and model performance.
+
+- `step_normalize()` : This step normalizes numeric variables to have a mean of zero and a standard deviation of one. Normalizing data can improve the convergence and performance of many algorithms (e.g., gradient-based methods) by ensuring that each feature contributes equally to the model's predictions.
+
+#### Tuning Parameters
+
+The tuning parameters that I set during this round are based on information gained during round 1 of figuring out what values or ranges worked to provide the best performing models/models types. 
+
+For my Boosted Tree model, I decided to tune the following parameters:
+
+- `trees()` : I tuned this hyperparameter in the range (1000, 1500). I decided to do this after looking at the autoplot for my round 1 baseline Boosted Tree model types, I felt there was a trend with as the number of trees rose, the `roc_auc` metric would showcase better performance. 
+
+- `mtry()`: I tuned this hyperparameter in the range (14,35). I decided to do this after also looking at the autoplot for my round 1 baseline Boosted Tree model types, and I saw that a higher range for this hyperparamter might provide me with better performance than that of a lower range. Thus I wanted to go for a middle ground of not being too high but also exploring more in that range. 
+
+- `learn_rate()`: I used the default range when tuning this hyperparameter. Previously, in round one I used the range (-5, -0.2) based on previous labs in class. However I felt to better gauge what the optimal range and parameters are for this hyperparameter, I went back to looking at the default range which covered a large area.  
+
+I decided to not tune `min_n()` has after looking at how the parameter performed at the different levels for my round 1 baseline Boosted Tree model types, I confirmed that when `min_n()` equals 1, I will receive the optimized performance for the model overall, compared to other values of `min_n()`. 
+
+#### Final Assessment 
+
+Turning to the final assessment of the model (round 2, recipe 1 Boosted Tree model), I was able to see that it performed extremely well on the testing portion of the `train_classification.csv` file, as showed in the table below, producing a `roc_auc` value of .958. This is an extremely high `roc_auc` value indicating that the model perform excellently as it can very effectively distinguish between the positive and negative classes. A `roc_auc` value close to 1, as mine is, suggests that the model's predictions are almost perfectly accurate, with minimal false positives and false negatives. Thus meaning the model does extremely well in predicting if a host is a superhost or not.
+
+```{r}
+#| label: assessment-1 
+#| echo: false 
+
+read_rds("results/round_2/airbnb_model_metrics.rds") %>% knitr::kable()
+
+read_rds("results/round_2/airbnb_curve_plot.rds")
+```
+
+This ROC curve plot also affirms the performance metric value that we received as it showcases to us the performance of the model at all classification thresholds. Since, our ROC curve is close to the upper left corner of the graph, we can then affirm the high accuracy of the test because the sensitivity and specificity are close to 1, showcasing the lack of false negatives or false positives in the predictions made by the model. 
+
+However, after taking my model and applying it to the `test_classification.csv` data, submitting it to Kaggle, I saw a decrease in performance as it generated a `roc_auc` value of .954. This could mean
+that there was some overfitting in my model building, however I also have to think about the standard error that was associated with best model type of my Boosted Tree model after tuning, as the performance only decreased by .004. In general from this result, we can then state that in terms of `roc_auc`, the Boosted Tree model has a 95% accuracy rate in predicting superhost status. 
+
+Overall, this model was extremely robust being able to interpret unseen data and produce predictions that were also completely accurate, having little to not incorrect predictions made. 
+
+### Round 3, Recipe 1 Random Forest Model II
+
+This model is associated with the submission that I personally chose to submit, being `airbnb_submission_3_2.csv`. This model was created during the third round of model building and testing, being the second submission from this round. 
+
+#### How I got to this model
+
+I got to this model after looking at what worked and did not work from the previous two round, both in terms of the tuning parameters that I set, as well as the models to use, and how I should format my recipes to bring the most optimization to my models. 
+
+Through the first and second round results, I saw that a more baseline or less feature engineered recipe, performed a lot better than the heavily feature engineered recipe. As I previously said, looking back I do think this could be related to how I ordered my steps within the recipes however, this also perhaps acted as a lesson that too much feature engineering can also lower performance rather than improve it always. Furthermore, I wanted to create change the threshold number used in round 1 and 2 with `step_other()` as it was at 0.5, and I felt perhaps this was causing a lose of too much data thus I lowered it to 0.1. 
+
+Thus from this, I went into round 3 with the works to change just small aspects of my recipe outlines, deciding to stick with just one recipe structure this time, focusing more into how changing the tuning parameters of my models would help to find the best ranges for optimization.
+
+I decided to continue to work with Random Forest models up until this stage, because they consistently performed well being the second best model type after the Boosted Tree models in every round and stage I progressed through.
+
+#### Recipe
+
+Turning to the recipe, it is very similar to the one that I already mentioned above, however differing as I decided to add on `step_corr()` to identify and remove highly correlated predictors, as well as changing the threshold for `step_other()` to be 0.1 as mentioned above. As Random Forests models are nonparametric, I did create a separate recipe for them from the parametric models. The only differ being that `step_dummy()` for the nonparametric models has one hot encoding enabled, and the parametric models do not. 
+
+Steps:
+
+- `update_role()` : This function updates the roles of variables in your dataset. In This I used it to update the role of the `id` variable from being a predictor to being just an id indicator that would not be apart of the model building but still exist in my dataset. This ensures that the model treats each variable appropriately, avoiding misuse of variables that could lead to poor model performance.
+
+- `step_date()` : This step extracts components of date variables (e.g., year, month, day, day of the week), making them into separate entities within my dataset. By breaking down date variables into meaningful components, the model can better capture temporal patterns and trends, which can enhance predictive accuracy.
+
+- `step_impute_mode()` : This step imputes missing values in categorical variables using the mode or most frequent value. Handling missing data appropriately prevents loss of information and allows the model to make better use of available data, improving robustness and accuracy.
+
+- `step_impute_median()` : This step imputes missing values in numeric variables using the median or 50% percentile number. Imputing with the median is less sensitive to outliers compared to the mean, resulting in more stable and reliable imputations that improve model performance.
+
+- `step_novel()` : This step assigns a new category ("novel") to previously unseen factor levels in categorical variables during prediction. By handling novel levels, the model can generalize better to new data and avoid errors or misclassifications caused by unexpected categories.
+
+- `step_other()` : This step consolidates infrequent factor levels into a single "other" category. With this step I set the threshold to 0.1, meaning that if the factor level did not show up more than 10% of the time, it would be placed into the "other" category. This helps to reduce the number of categories in the categorical variables, preventing overfitting and improving model interpretability and performance by ensuring the model focuses on more significant patterns.
+
+- `step_corr()` : This step identifies and removes highly correlated predictors. By removing these predictors, I ensured that the final model includes only the most relevant and independent features, improving its predictive power and interpretability.
+
+- `step_dummy()` : This step converts categorical variables into dummy (one-hot encoded) variables. Dummy variables allow models to handle categorical data appropriately, enabling the model to capture the impact of each category on the outcome variable.
+
+- `step_nzv()` : This step removes near-zero variance predictors. By eliminating predictors that have little to no variation, the model avoids overfitting to noise and improves computational efficiency and model performance.
+
+- `step_normalize()` : This step normalizes numeric variables to have a mean of zero and a standard deviation of one. Normalizing data can improve the convergence and performance of many algorithms (e.g., gradient-based methods) by ensuring that each feature contributes equally to the model's predictions.
+
+#### Tuning Parameters
+
+The tuning parameters that I set during this round are based on information gained during round 1 and round 2 of model building, figuring out what values or ranges worked to provide the best performing models/models types. 
+
+For my Random Forest model, I decided to tune the following parameters:
+
+- `trees()` : I tuned this hyperparameter in the range (1020, 1350). I decided to do this after looking at the autoplot for my round 1 and 2 baseline Random Forest model types, as well as the first version baseline Random Forest model from round 3. I felt there was a trend within this range that provided the best performance for the `roc_auc` metric, as above and under this range I saw decreases in performance. 
+
+- `mtry()`: I tuned this hyperparameter in the range (25,40). I decided to do this after also looking at the autoplot for my round 1 and round 2 baseline Random Forest model types, as well as the first version baseline Random Forest model from round 3. I saw that a higher range for this hyperparamter might provide me with better performance than that of a lower range. Thus I wanted to go for a middle ground of not being too high but also exploring more in that range. Furthermore, within this I saw that past 40 there was little to no increase in performance for the `roc_auc` metric.  
+
+I decided to not tune `min_n()` has after looking at how the parameter performed at the different levels for my round 1 and round 2 baseline Random Forest model types, I confirmed that when `min_n()` equals 1, I will receive the optimized performance for the model overall, compared to other values of `min_n()`. 
+
+#### Final Assessment 
+
+Turning to the final assessment of the model (round 3, recipe 1, second trial Random Forest model), I was able to see that it performed efficiently on the testing portion of the `train_classification.csv` file, as showed in the table below, producing a `roc_auc` value of .940. This is a high `roc_auc` value indicating that the model perform well as it can effectively distinguish between the positive and negative classes. A `roc_auc` value close to 1, as mine almost is, suggests that the model's predictions are almost perfectly accurate, with minimal false positives and false negatives. Thus meaning the model does well in predicting if a host is a superhost or not.
+
+```{r}
+#| label: assessment-2 
+#| echo: false 
+
+read_rds("results/round_3/airbnb_model_metrics.rds") %>% knitr::kable()
+
+read_rds("results/round_3/airbnb_curve_plot.rds")
+```
+
+This ROC curve plot also affirms the performance metric value that we received as it showcases to us the performance of the model at all classification thresholds. Since, our ROC curve is close to the upper left corner of the graph, we can then affirm the accuracy of the test because the sensitivity and specificity are almost near 1, showcasing the lack of false negatives or false positives in the predictions made by the model. 
+
+After taking my model and applying it to the `test_classification.csv` data and submitting it to Kaggle, I saw a decrease in performance as it generated a `roc_auc` value of .934. This could mean
+that there was potentially some overfitting in my model building, however I also have to think about the standard error that was associated with best model type of my Boosted Tree model after tuning, as the performance only decreased by .006. In general from this result, we can then state that in terms of `roc_auc`, the Boosted Tree model has a 93% accuracy rate in predicting superhost status. 
+
+Overall, this model was robust being able to interpret unseen data and produce predictions that were also completely accurate, having little to not incorrect predictions made. Furthermore, despite not reaching the challenges top `roc_auc` threshold value, I believe that it performs extremely well and could be dependable in predicting with the private and unseen dataset.
+
+## Why I chose these two models 
+
+I chose my first model, round 2, recipe 1 Boosted Tree model, because it was my best performing model/submission demonstrating strong predictive capabilities passing the challenges top threshold. 
+
+I chose my second model, the round 3, recipe 1, second trial Random Forest model, because I feel that Random Forest models overall are extremely robust and well-designed to produce accurate predictions on unseen data. Additionally, random forest models are known for not leading to overfitting quickly, due to their nonparametric approach. Furthermore, throughout the process, my Random Forest models consistently achieved high mean `roc_auc` values, around 0.945, indicating excellent predictive ability. This high performance gives me confidence that the Random Forest model will perform well on the private test data.  
+
+Overall, I have confidence in my model selection choices because throughout the entire process, both my Random Forest and Boosted Tree models types performed the best out of all of the models that I used and tuned. 
+
+## Conclusion
+
+This project has showcased the application of various predictive modeling 
+techniques to accurately classify Airbnb superhosts. 
+
+I was able to produced two high efficient and robust models using `roc_auc` as the primary evaluation metric, providing a clear and interpret able measure of prediction accuracy. Both the Boosted Tree and Random Forest models demonstrated high performances, with the Random Forest model producing a `roc_auc` value of .934 on unseen data and the Boosted Tree model having a `roc_auc` value of 0.953. These performances underscored the robustness and reliability of both models, with both being
+able to predict if an Airbnb host is a superhost or not, with little to no mistakes or false predictions.
+
+Additionally both models stand out for their robustness and ability to produce accurate predictions on unseen data. The nonparametric nature and resistance to overfitting for both models make them a dependable choice for practical applications. The high mean `roc_auc` values achieved throughout the process further gives me confidence in their abilities to perform well on private test data.
+
+Thus through leveraging insights from data exploration, adding relevant variables, and rigorously validating models, I was able to develop highly accurate and reliable models for predicting Airbnb superhosts.
